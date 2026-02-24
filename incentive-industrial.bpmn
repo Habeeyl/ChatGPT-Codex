@@ -1,0 +1,444 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+             xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+             xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+             targetNamespace="http://bpmn.io/schema/bpmn"
+             id="Definitions_IncentiveIndustrial">
+
+  <collaboration id="Collaboration_IncentiveIndustrial">
+    <participant id="Participant_IncentiveProcess" name="Incentive Industrial Process" processRef="Process_IncentiveIndustrial"/>
+  </collaboration>
+
+  <process id="Process_IncentiveIndustrial" isExecutable="false">
+
+    <!-- ===================== LANE DEFINITIONS ===================== -->
+    <laneSet id="LaneSet_1">
+      <lane id="Lane_OpsSupport" name="Operational Support">
+        <flowNodeRef>StartEvent_1</flowNodeRef>
+        <flowNodeRef>Gateway_PeriodType</flowNodeRef>
+        <flowNodeRef>Task_UploadMasterData</flowNodeRef>
+        <flowNodeRef>Task_UploadProjectTeam</flowNodeRef>
+        <flowNodeRef>Gateway_IsProject</flowNodeRef>
+        <flowNodeRef>Task_ValidateData</flowNodeRef>
+        <flowNodeRef>Gateway_DataValid</flowNodeRef>
+        <flowNodeRef>Task_GenerateErrorReport</flowNodeRef>
+        <flowNodeRef>Task_IncentiveCalculation</flowNodeRef>
+        <flowNodeRef>Task_ExportReport</flowNodeRef>
+        <flowNodeRef>Task_GenerateAuditTrail</flowNodeRef>
+      </lane>
+      <lane id="Lane_AR" name="Account Receivables">
+        <flowNodeRef>Task_VerifyCalculation</flowNodeRef>
+        <flowNodeRef>Gateway_ARValid</flowNodeRef>
+        <flowNodeRef>Task_ReturnToOps</flowNodeRef>
+      </lane>
+      <lane id="Lane_Approval" name="Approval Authority">
+        <flowNodeRef>Gateway_Threshold</flowNodeRef>
+        <flowNodeRef>Task_BoDApproval</flowNodeRef>
+        <flowNodeRef>Task_ManagerApproval</flowNodeRef>
+      </lane>
+      <lane id="Lane_Payroll" name="Payroll / System">
+        <flowNodeRef>Task_SubmitToPayroll</flowNodeRef>
+        <flowNodeRef>Task_SendDataToPayroll</flowNodeRef>
+        <flowNodeRef>EndEvent_1</flowNodeRef>
+      </lane>
+      <lane id="Lane_Retroactive" name="Retroactive Trigger">
+        <flowNodeRef>StartEvent_Retro</flowNodeRef>
+        <flowNodeRef>Task_RetroRecalculation</flowNodeRef>
+      </lane>
+    </laneSet>
+
+    <!-- ===================== EVENTS ===================== -->
+    <startEvent id="StartEvent_1" name="Start">
+      <outgoing>Flow_Start_to_PeriodGW</outgoing>
+    </startEvent>
+
+    <startEvent id="StartEvent_Retro" name="KN Posted / Payment Overdue / WBS TECO / Payment Cleared">
+      <timerEventDefinition id="TimerDef_Retro"/>
+      <outgoing>Flow_Retro_to_Recalc</outgoing>
+    </startEvent>
+
+    <endEvent id="EndEvent_1" name="End">
+      <incoming>Flow_SendPayroll_to_End</incoming>
+    </endEvent>
+
+    <!-- ===================== GATEWAYS ===================== -->
+    <exclusiveGateway id="Gateway_PeriodType" name="Period Type?">
+      <incoming>Flow_Start_to_PeriodGW</incoming>
+      <outgoing>Flow_Period_Monthly</outgoing>
+      <outgoing>Flow_Period_Quarterly</outgoing>
+    </exclusiveGateway>
+
+    <exclusiveGateway id="Gateway_IsProject" name="Project?">
+      <incoming>Flow_UploadMaster_to_IsProject</incoming>
+      <outgoing>Flow_IsProject_Yes</outgoing>
+      <outgoing>Flow_IsProject_No</outgoing>
+    </exclusiveGateway>
+
+    <exclusiveGateway id="Gateway_DataValid" name="Data Valid?">
+      <incoming>Flow_Validate_to_DataValidGW</incoming>
+      <outgoing>Flow_DataValid_Yes</outgoing>
+      <outgoing>Flow_DataValid_No</outgoing>
+    </exclusiveGateway>
+
+    <exclusiveGateway id="Gateway_ARValid" name="Valid?">
+      <incoming>Flow_Verify_to_ARValidGW</incoming>
+      <outgoing>Flow_ARValid_Yes</outgoing>
+      <outgoing>Flow_ARValid_No</outgoing>
+    </exclusiveGateway>
+
+    <exclusiveGateway id="Gateway_Threshold" name="Exceeds Threshold or Has Clawback?">
+      <incoming>Flow_ARValid_Yes</incoming>
+      <outgoing>Flow_Threshold_Yes</outgoing>
+      <outgoing>Flow_Threshold_No</outgoing>
+    </exclusiveGateway>
+
+    <!-- ===================== TASKS — OPS SUPPORT ===================== -->
+    <task id="Task_UploadMasterData" name="Upload Master Data&#10;(HC, Target, Mapping)">
+      <incoming>Flow_Period_Monthly</incoming>
+      <incoming>Flow_Period_Quarterly</incoming>
+      <outgoing>Flow_UploadMaster_to_IsProject</outgoing>
+    </task>
+
+    <task id="Task_UploadProjectTeam" name="Upload Project Team">
+      <incoming>Flow_IsProject_Yes</incoming>
+      <outgoing>Flow_UploadProject_to_Validate</outgoing>
+    </task>
+
+    <task id="Task_ValidateData" name="Validate Data">
+      <incoming>Flow_IsProject_No</incoming>
+      <incoming>Flow_UploadProject_to_Validate</incoming>
+      <incoming>Flow_ErrorReport_to_Validate</incoming>
+      <outgoing>Flow_Validate_to_DataValidGW</outgoing>
+    </task>
+
+    <task id="Task_GenerateErrorReport" name="Generate Error Report + Notify Responsible Parties">
+      <incoming>Flow_DataValid_No</incoming>
+      <outgoing>Flow_ErrorReport_to_Validate</outgoing>
+    </task>
+
+    <subProcess id="Task_IncentiveCalculation" name="Incentive Calculation Engine">
+      <incoming>Flow_DataValid_Yes</incoming>
+      <incoming>Flow_ReturnToOps_to_Recalc</incoming>
+      <outgoing>Flow_Calc_to_ExportReport</outgoing>
+      <outgoing>Flow_Calc_to_AuditTrail</outgoing>
+    </subProcess>
+
+    <task id="Task_ExportReport" name="Export Report&#10;(Hold Summary, Non-Hold Summary, Detail)">
+      <incoming>Flow_Calc_to_ExportReport</incoming>
+      <outgoing>Flow_Export_to_Verify</outgoing>
+    </task>
+
+    <task id="Task_GenerateAuditTrail" name="Generate Audit Trail&#10;(Per-person: source transactions, achievement, rate, payout)">
+      <incoming>Flow_Calc_to_AuditTrail</incoming>
+    </task>
+
+    <!-- ===================== TASKS — ACCOUNT RECEIVABLES ===================== -->
+    <task id="Task_VerifyCalculation" name="Verify Incentive Calculation&#10;(Control totals, sample check detail vs SAP, flag anomalies)">
+      <incoming>Flow_Export_to_Verify</incoming>
+      <incoming>Flow_Retro_to_Verify</incoming>
+      <outgoing>Flow_Verify_to_ARValidGW</outgoing>
+    </task>
+
+    <task id="Task_ReturnToOps" name="Return to Ops with Specific Rejection Reasons">
+      <incoming>Flow_ARValid_No</incoming>
+      <outgoing>Flow_ReturnToOps_to_Recalc</outgoing>
+    </task>
+
+    <!-- ===================== TASKS — APPROVAL AUTHORITY ===================== -->
+    <task id="Task_BoDApproval" name="BoD Approval + Sign&#10;(Exceptions only)">
+      <incoming>Flow_Threshold_Yes</incoming>
+      <outgoing>Flow_BoD_to_Submit</outgoing>
+    </task>
+
+    <task id="Task_ManagerApproval" name="Manager Approval + Sign&#10;(Routine cycles)">
+      <incoming>Flow_Threshold_No</incoming>
+      <outgoing>Flow_Manager_to_Submit</outgoing>
+    </task>
+
+    <!-- ===================== TASKS — PAYROLL / SYSTEM ===================== -->
+    <task id="Task_SubmitToPayroll" name="Submit to Payroll&#10;(Only after approval complete)">
+      <incoming>Flow_BoD_to_Submit</incoming>
+      <incoming>Flow_Manager_to_Submit</incoming>
+      <outgoing>Flow_Submit_to_Send</outgoing>
+    </task>
+
+    <task id="Task_SendDataToPayroll" name="Send Data to Payroll&#10;(System Process)">
+      <incoming>Flow_Submit_to_Send</incoming>
+      <outgoing>Flow_SendPayroll_to_End</outgoing>
+    </task>
+
+    <!-- ===================== TASKS — RETROACTIVE TRIGGER ===================== -->
+    <task id="Task_RetroRecalculation" name="Retroactive Recalculation&#10;(Identify affected periods, Recalculate, Generate delta report, Route to AR Verification)">
+      <incoming>Flow_Retro_to_Recalc</incoming>
+      <outgoing>Flow_Retro_to_Verify</outgoing>
+    </task>
+
+    <!-- ===================== SEQUENCE FLOWS ===================== -->
+    <sequenceFlow id="Flow_Start_to_PeriodGW" sourceRef="StartEvent_1" targetRef="Gateway_PeriodType"/>
+    <sequenceFlow id="Flow_Period_Monthly" name="Monthly" sourceRef="Gateway_PeriodType" targetRef="Task_UploadMasterData"/>
+    <sequenceFlow id="Flow_Period_Quarterly" name="Qtr/Semi" sourceRef="Gateway_PeriodType" targetRef="Task_UploadMasterData"/>
+    <sequenceFlow id="Flow_UploadMaster_to_IsProject" sourceRef="Task_UploadMasterData" targetRef="Gateway_IsProject"/>
+    <sequenceFlow id="Flow_IsProject_Yes" name="Yes" sourceRef="Gateway_IsProject" targetRef="Task_UploadProjectTeam"/>
+    <sequenceFlow id="Flow_IsProject_No" name="No" sourceRef="Gateway_IsProject" targetRef="Task_ValidateData"/>
+    <sequenceFlow id="Flow_UploadProject_to_Validate" sourceRef="Task_UploadProjectTeam" targetRef="Task_ValidateData"/>
+    <sequenceFlow id="Flow_Validate_to_DataValidGW" sourceRef="Task_ValidateData" targetRef="Gateway_DataValid"/>
+    <sequenceFlow id="Flow_DataValid_Yes" name="Yes" sourceRef="Gateway_DataValid" targetRef="Task_IncentiveCalculation"/>
+    <sequenceFlow id="Flow_DataValid_No" name="No" sourceRef="Gateway_DataValid" targetRef="Task_GenerateErrorReport"/>
+    <sequenceFlow id="Flow_ErrorReport_to_Validate" sourceRef="Task_GenerateErrorReport" targetRef="Task_ValidateData"/>
+    <sequenceFlow id="Flow_Calc_to_ExportReport" sourceRef="Task_IncentiveCalculation" targetRef="Task_ExportReport"/>
+    <sequenceFlow id="Flow_Calc_to_AuditTrail" sourceRef="Task_IncentiveCalculation" targetRef="Task_GenerateAuditTrail"/>
+    <sequenceFlow id="Flow_Export_to_Verify" sourceRef="Task_ExportReport" targetRef="Task_VerifyCalculation"/>
+    <sequenceFlow id="Flow_Verify_to_ARValidGW" sourceRef="Task_VerifyCalculation" targetRef="Gateway_ARValid"/>
+    <sequenceFlow id="Flow_ARValid_Yes" name="Yes" sourceRef="Gateway_ARValid" targetRef="Gateway_Threshold"/>
+    <sequenceFlow id="Flow_ARValid_No" name="No" sourceRef="Gateway_ARValid" targetRef="Task_ReturnToOps"/>
+    <sequenceFlow id="Flow_ReturnToOps_to_Recalc" sourceRef="Task_ReturnToOps" targetRef="Task_IncentiveCalculation"/>
+    <sequenceFlow id="Flow_Threshold_Yes" name="Yes (Exceptions)" sourceRef="Gateway_Threshold" targetRef="Task_BoDApproval"/>
+    <sequenceFlow id="Flow_Threshold_No" name="No (Routine)" sourceRef="Gateway_Threshold" targetRef="Task_ManagerApproval"/>
+    <sequenceFlow id="Flow_BoD_to_Submit" sourceRef="Task_BoDApproval" targetRef="Task_SubmitToPayroll"/>
+    <sequenceFlow id="Flow_Manager_to_Submit" sourceRef="Task_ManagerApproval" targetRef="Task_SubmitToPayroll"/>
+    <sequenceFlow id="Flow_Submit_to_Send" sourceRef="Task_SubmitToPayroll" targetRef="Task_SendDataToPayroll"/>
+    <sequenceFlow id="Flow_SendPayroll_to_End" sourceRef="Task_SendDataToPayroll" targetRef="EndEvent_1"/>
+    <sequenceFlow id="Flow_Retro_to_Recalc" sourceRef="StartEvent_Retro" targetRef="Task_RetroRecalculation"/>
+    <sequenceFlow id="Flow_Retro_to_Verify" sourceRef="Task_RetroRecalculation" targetRef="Task_VerifyCalculation"/>
+
+  </process>
+
+  <!-- ===================== DIAGRAM LAYOUT (DI) ===================== -->
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="Collaboration_IncentiveIndustrial">
+
+      <!-- PARTICIPANT CONTAINER -->
+      <bpmndi:BPMNShape id="Participant_IncentiveProcess_di" bpmnElement="Participant_IncentiveProcess" isHorizontal="true">
+        <dc:Bounds x="120" y="80" width="1800" height="900"/>
+      </bpmndi:BPMNShape>
+
+      <!-- LANES -->
+      <bpmndi:BPMNShape id="Lane_OpsSupport_di" bpmnElement="Lane_OpsSupport" isHorizontal="true">
+        <dc:Bounds x="150" y="80" width="1770" height="300"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Lane_AR_di" bpmnElement="Lane_AR" isHorizontal="true">
+        <dc:Bounds x="150" y="380" width="1770" height="150"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Lane_Approval_di" bpmnElement="Lane_Approval" isHorizontal="true">
+        <dc:Bounds x="150" y="530" width="1770" height="150"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Lane_Payroll_di" bpmnElement="Lane_Payroll" isHorizontal="true">
+        <dc:Bounds x="150" y="680" width="1770" height="150"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Lane_Retroactive_di" bpmnElement="Lane_Retroactive" isHorizontal="true">
+        <dc:Bounds x="150" y="830" width="1770" height="150"/>
+      </bpmndi:BPMNShape>
+
+      <!-- START EVENT -->
+      <bpmndi:BPMNShape id="StartEvent_1_di" bpmnElement="StartEvent_1">
+        <dc:Bounds x="202" y="192" width="36" height="36"/>
+        <bpmndi:BPMNLabel><dc:Bounds x="208" y="235" width="24" height="14"/></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <!-- GATEWAY: PERIOD TYPE -->
+      <bpmndi:BPMNShape id="Gateway_PeriodType_di" bpmnElement="Gateway_PeriodType" isMarkerVisible="true">
+        <dc:Bounds x="285" y="185" width="50" height="50"/>
+        <bpmndi:BPMNLabel><dc:Bounds x="268" y="242" width="84" height="14"/></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <!-- TASK: UPLOAD MASTER DATA -->
+      <bpmndi:BPMNShape id="Task_UploadMasterData_di" bpmnElement="Task_UploadMasterData">
+        <dc:Bounds x="390" y="170" width="120" height="80"/>
+      </bpmndi:BPMNShape>
+
+      <!-- GATEWAY: IS PROJECT -->
+      <bpmndi:BPMNShape id="Gateway_IsProject_di" bpmnElement="Gateway_IsProject" isMarkerVisible="true">
+        <dc:Bounds x="565" y="185" width="50" height="50"/>
+        <bpmndi:BPMNLabel><dc:Bounds x="558" y="242" width="64" height="14"/></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <!-- TASK: UPLOAD PROJECT TEAM -->
+      <bpmndi:BPMNShape id="Task_UploadProjectTeam_di" bpmnElement="Task_UploadProjectTeam">
+        <dc:Bounds x="670" y="100" width="120" height="80"/>
+      </bpmndi:BPMNShape>
+
+      <!-- TASK: VALIDATE DATA -->
+      <bpmndi:BPMNShape id="Task_ValidateData_di" bpmnElement="Task_ValidateData">
+        <dc:Bounds x="670" y="200" width="120" height="80"/>
+      </bpmndi:BPMNShape>
+
+      <!-- GATEWAY: DATA VALID -->
+      <bpmndi:BPMNShape id="Gateway_DataValid_di" bpmnElement="Gateway_DataValid" isMarkerVisible="true">
+        <dc:Bounds x="845" y="215" width="50" height="50"/>
+        <bpmndi:BPMNLabel><dc:Bounds x="833" y="272" width="74" height="14"/></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <!-- TASK: GENERATE ERROR REPORT -->
+      <bpmndi:BPMNShape id="Task_GenerateErrorReport_di" bpmnElement="Task_GenerateErrorReport">
+        <dc:Bounds x="830" y="110" width="120" height="80"/>
+      </bpmndi:BPMNShape>
+
+      <!-- TASK: INCENTIVE CALCULATION (SubProcess) -->
+      <bpmndi:BPMNShape id="Task_IncentiveCalculation_di" bpmnElement="Task_IncentiveCalculation" isExpanded="false">
+        <dc:Bounds x="960" y="170" width="160" height="80"/>
+      </bpmndi:BPMNShape>
+
+      <!-- TASK: EXPORT REPORT -->
+      <bpmndi:BPMNShape id="Task_ExportReport_di" bpmnElement="Task_ExportReport">
+        <dc:Bounds x="1180" y="170" width="120" height="80"/>
+      </bpmndi:BPMNShape>
+
+      <!-- TASK: GENERATE AUDIT TRAIL -->
+      <bpmndi:BPMNShape id="Task_GenerateAuditTrail_di" bpmnElement="Task_GenerateAuditTrail">
+        <dc:Bounds x="1180" y="275" width="120" height="80"/>
+      </bpmndi:BPMNShape>
+
+      <!-- TASK: VERIFY CALCULATION (AR) -->
+      <bpmndi:BPMNShape id="Task_VerifyCalculation_di" bpmnElement="Task_VerifyCalculation">
+        <dc:Bounds x="1360" y="405" width="140" height="80"/>
+      </bpmndi:BPMNShape>
+
+      <!-- GATEWAY: AR VALID -->
+      <bpmndi:BPMNShape id="Gateway_ARValid_di" bpmnElement="Gateway_ARValid" isMarkerVisible="true">
+        <dc:Bounds x="1555" y="420" width="50" height="50"/>
+        <bpmndi:BPMNLabel><dc:Bounds x="1562" y="477" width="36" height="14"/></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <!-- TASK: RETURN TO OPS -->
+      <bpmndi:BPMNShape id="Task_ReturnToOps_di" bpmnElement="Task_ReturnToOps">
+        <dc:Bounds x="1540" y="330" width="120" height="80"/>
+      </bpmndi:BPMNShape>
+
+      <!-- GATEWAY: THRESHOLD -->
+      <bpmndi:BPMNShape id="Gateway_Threshold_di" bpmnElement="Gateway_Threshold" isMarkerVisible="true">
+        <dc:Bounds x="1660" y="555" width="50" height="50"/>
+        <bpmndi:BPMNLabel><dc:Bounds x="1638" y="612" width="94" height="28"/></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <!-- TASK: BOD APPROVAL -->
+      <bpmndi:BPMNShape id="Task_BoDApproval_di" bpmnElement="Task_BoDApproval">
+        <dc:Bounds x="1560" y="545" width="120" height="80"/>
+      </bpmndi:BPMNShape>
+
+      <!-- TASK: MANAGER APPROVAL -->
+      <bpmndi:BPMNShape id="Task_ManagerApproval_di" bpmnElement="Task_ManagerApproval">
+        <dc:Bounds x="1700" y="545" width="120" height="80"/>
+      </bpmndi:BPMNShape>
+
+      <!-- TASK: SUBMIT TO PAYROLL -->
+      <bpmndi:BPMNShape id="Task_SubmitToPayroll_di" bpmnElement="Task_SubmitToPayroll">
+        <dc:Bounds x="1560" y="705" width="120" height="80"/>
+      </bpmndi:BPMNShape>
+
+      <!-- TASK: SEND DATA TO PAYROLL -->
+      <bpmndi:BPMNShape id="Task_SendDataToPayroll_di" bpmnElement="Task_SendDataToPayroll">
+        <dc:Bounds x="1730" y="705" width="120" height="80"/>
+      </bpmndi:BPMNShape>
+
+      <!-- END EVENT -->
+      <bpmndi:BPMNShape id="EndEvent_1_di" bpmnElement="EndEvent_1">
+        <dc:Bounds x="1882" y="727" width="36" height="36"/>
+        <bpmndi:BPMNLabel><dc:Bounds x="1888" y="770" width="24" height="14"/></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <!-- RETRO START EVENT -->
+      <bpmndi:BPMNShape id="StartEvent_Retro_di" bpmnElement="StartEvent_Retro">
+        <dc:Bounds x="202" y="877" width="36" height="36"/>
+        <bpmndi:BPMNLabel><dc:Bounds x="172" y="920" width="96" height="40"/></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <!-- TASK: RETROACTIVE RECALCULATION -->
+      <bpmndi:BPMNShape id="Task_RetroRecalculation_di" bpmnElement="Task_RetroRecalculation">
+        <dc:Bounds x="290" y="855" width="160" height="80"/>
+      </bpmndi:BPMNShape>
+
+      <!-- ===================== SEQUENCE FLOW EDGES ===================== -->
+      <bpmndi:BPMNEdge id="Flow_Start_to_PeriodGW_di" bpmnElement="Flow_Start_to_PeriodGW">
+        <di:waypoint x="238" y="210"/><di:waypoint x="285" y="210"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Period_Monthly_di" bpmnElement="Flow_Period_Monthly">
+        <di:waypoint x="335" y="210"/><di:waypoint x="390" y="210"/>
+        <bpmndi:BPMNLabel><dc:Bounds x="342" y="192" width="42" height="14"/></bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Period_Quarterly_di" bpmnElement="Flow_Period_Quarterly">
+        <di:waypoint x="310" y="235"/><di:waypoint x="310" y="260"/><di:waypoint x="390" y="260"/><di:waypoint x="390" y="230"/>
+        <bpmndi:BPMNLabel><dc:Bounds x="322" y="258" width="46" height="14"/></bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_UploadMaster_to_IsProject_di" bpmnElement="Flow_UploadMaster_to_IsProject">
+        <di:waypoint x="510" y="210"/><di:waypoint x="565" y="210"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_IsProject_Yes_di" bpmnElement="Flow_IsProject_Yes">
+        <di:waypoint x="590" y="185"/><di:waypoint x="590" y="140"/><di:waypoint x="670" y="140"/>
+        <bpmndi:BPMNLabel><dc:Bounds x="596" y="158" width="18" height="14"/></bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_IsProject_No_di" bpmnElement="Flow_IsProject_No">
+        <di:waypoint x="615" y="210"/><di:waypoint x="670" y="240"/>
+        <bpmndi:BPMNLabel><dc:Bounds x="628" y="218" width="15" height="14"/></bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_UploadProject_to_Validate_di" bpmnElement="Flow_UploadProject_to_Validate">
+        <di:waypoint x="730" y="180"/><di:waypoint x="730" y="200"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Validate_to_DataValidGW_di" bpmnElement="Flow_Validate_to_DataValidGW">
+        <di:waypoint x="790" y="240"/><di:waypoint x="845" y="240"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_DataValid_Yes_di" bpmnElement="Flow_DataValid_Yes">
+        <di:waypoint x="895" y="240"/><di:waypoint x="960" y="210"/>
+        <bpmndi:BPMNLabel><dc:Bounds x="910" y="218" width="18" height="14"/></bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_DataValid_No_di" bpmnElement="Flow_DataValid_No">
+        <di:waypoint x="870" y="215"/><di:waypoint x="870" y="150"/><di:waypoint x="830" y="150"/>
+        <bpmndi:BPMNLabel><dc:Bounds x="876" y="178" width="15" height="14"/></bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ErrorReport_to_Validate_di" bpmnElement="Flow_ErrorReport_to_Validate">
+        <di:waypoint x="830" y="150"/><di:waypoint x="730" y="150"/><di:waypoint x="730" y="200"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Calc_to_ExportReport_di" bpmnElement="Flow_Calc_to_ExportReport">
+        <di:waypoint x="1120" y="210"/><di:waypoint x="1180" y="210"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Calc_to_AuditTrail_di" bpmnElement="Flow_Calc_to_AuditTrail">
+        <di:waypoint x="1120" y="230"/><di:waypoint x="1150" y="315"/><di:waypoint x="1180" y="315"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Export_to_Verify_di" bpmnElement="Flow_Export_to_Verify">
+        <di:waypoint x="1300" y="210"/><di:waypoint x="1430" y="210"/><di:waypoint x="1430" y="405"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Verify_to_ARValidGW_di" bpmnElement="Flow_Verify_to_ARValidGW">
+        <di:waypoint x="1500" y="445"/><di:waypoint x="1555" y="445"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ARValid_No_di" bpmnElement="Flow_ARValid_No">
+        <di:waypoint x="1580" y="420"/><di:waypoint x="1580" y="370"/><di:waypoint x="1540" y="370"/>
+        <bpmndi:BPMNLabel><dc:Bounds x="1552" y="390" width="15" height="14"/></bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ReturnToOps_to_Recalc_di" bpmnElement="Flow_ReturnToOps_to_Recalc">
+        <di:waypoint x="1040" y="370"/><di:waypoint x="1040" y="250"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ARValid_Yes_di" bpmnElement="Flow_ARValid_Yes">
+        <di:waypoint x="1605" y="445"/><di:waypoint x="1685" y="445"/><di:waypoint x="1685" y="555"/>
+        <bpmndi:BPMNLabel><dc:Bounds x="1630" y="427" width="18" height="14"/></bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Threshold_Yes_di" bpmnElement="Flow_Threshold_Yes">
+        <di:waypoint x="1660" y="580"/><di:waypoint x="1620" y="580"/><di:waypoint x="1620" y="545"/>
+        <bpmndi:BPMNLabel><dc:Bounds x="1614" y="558" width="46" height="14"/></bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Threshold_No_di" bpmnElement="Flow_Threshold_No">
+        <di:waypoint x="1710" y="580"/><di:waypoint x="1760" y="580"/><di:waypoint x="1760" y="545"/>
+        <bpmndi:BPMNLabel><dc:Bounds x="1714" y="558" width="42" height="14"/></bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_BoD_to_Submit_di" bpmnElement="Flow_BoD_to_Submit">
+        <di:waypoint x="1620" y="625"/><di:waypoint x="1620" y="705"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Manager_to_Submit_di" bpmnElement="Flow_Manager_to_Submit">
+        <di:waypoint x="1760" y="625"/><di:waypoint x="1760" y="670"/><di:waypoint x="1660" y="670"/><di:waypoint x="1660" y="705"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Submit_to_Send_di" bpmnElement="Flow_Submit_to_Send">
+        <di:waypoint x="1680" y="745"/><di:waypoint x="1730" y="745"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_SendPayroll_to_End_di" bpmnElement="Flow_SendPayroll_to_End">
+        <di:waypoint x="1850" y="745"/><di:waypoint x="1882" y="745"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Retro_to_Recalc_di" bpmnElement="Flow_Retro_to_Recalc">
+        <di:waypoint x="238" y="895"/><di:waypoint x="290" y="895"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Retro_to_Verify_di" bpmnElement="Flow_Retro_to_Verify">
+        <di:waypoint x="450" y="895"/><di:waypoint x="1430" y="895"/><di:waypoint x="1430" y="485"/>
+      </bpmndi:BPMNEdge>
+
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</definitions>
